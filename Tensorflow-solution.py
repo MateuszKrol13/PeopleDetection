@@ -75,15 +75,22 @@ model = keras.Sequential(
     ]
 )
 
+# save best callback
+checkpoint_path = './models'
+SaveBest = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="val_accuracy", mode="max",
+                                           save_weights_only=True, save_best_only=True)
+
 model.summary()
 optimizer = keras.optimizers.SGD(learning_rate=0.1)
 loss = keras.losses.BinaryCrossentropy(from_logits=False)
 model.compile(loss=loss, optimizer=optimizer, metrics=["accuracy"])
-model.fit(x_train, y_train, batch_size=128, epochs=100, validation_split=0.3)
+model.fit(x_train, y_train, batch_size=128, epochs=100, validation_split=0.3, callbacks=[SaveBest])
+model.load_weights(checkpoint_path)
 
 # Moving window part :D
-test_image = cv2.imread("people_4.jpg")
+test_image = cv2.imread("people_2.jpg")
 test_image = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
+test_image_cpy = test_image
 h_test, v_test = np.shape(test_image)
 sv = 64         # image dims
 sh = 128
@@ -134,10 +141,10 @@ for level in range(1, levels):
     output_level_maps.append(out_map)
 
 for i, (x, y, w, h) in enumerate(dets):
-    cv2.rectangle(test_image, (int(x), int(y)), (int(x + w), int(y + h)), 255, 2)
+    cv2.rectangle(test_image_cpy, (int(x), int(y)), (int(x + w), int(y + h)), 255, 2)
 
 plt.figure(figsize=(10, 10))
-plt.imshow(test_image, cmap='gray')
+plt.imshow(test_image_cpy, cmap='gray')
 plt.title('Detections')
 plt.show(block=True)
 
@@ -170,3 +177,11 @@ while True:
     idx_to_delete = np.where(iou_tab > 0.05)
     tmp_dets = np.delete(tmp_dets, idx_to_delete, 0)
     tmp_scores = np.delete(tmp_scores, idx_to_delete)
+
+for i, (x, y, w, h) in enumerate(filtered_dets):
+    cv2.rectangle(test_image, (int(x), int(y)), (int(x + w), int(y + h)), 255, 2)
+
+plt.figure(figsize=(10, 10))
+plt.imshow(test_image, cmap='gray')
+plt.title('Detections')
+plt.show(block=True)
