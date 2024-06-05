@@ -3,16 +3,21 @@
 import matplotlib
 matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
+
+# my functions
 from functions import *
 from HOG import get_HOG_features
 
-# other libs
+# image processing libs
 import numpy as np
 import keras
 from sklearn.utils import shuffle
-from skimage.feature import hog, local_binary_pattern
+from skimage.feature import hog
 import cv2
+
+# QOL libs
 import glob
+import tqdm
 
 # epmpty data
 x = []
@@ -21,24 +26,17 @@ y = []
 #hog params
 orientation_bins = 16
 pixel_window = 16
-# input_len = int(128 * 64 * orientation_bins / (pixel_window ** 2))
-
-
-# Try LBP
-radius = 2
-circle = radius * 8
 
 # Load data - list of numpy arrays
 print("Getting people dataset features...")
 people_x = []
 people_y = []
-for img in glob.glob("classes\\person\\*.png"):
+for img in tqdm.tqdm(glob.glob("classes\\person\\*.png")):
     im = cv2.imread(img)
     im = cv2.resize(im, (64, 128))
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     #fd = hog(im, orientations=orientation_bins, pixels_per_cell=(pixel_window, pixel_window), cells_per_block=(2, 2))
     fd = get_HOG_features(im, pixels_per_cell=pixel_window, bin_count=orientation_bins, cells_per_block=2)
-    lbp = local_binary_pattern(im, circle, radius, 'default')
     people_x.append(fd)
     people_y.append(1)
 
@@ -48,29 +46,19 @@ people_y = people_y[:1000]
 print("Getting background dataset features...")
 background_x = []
 background_y = []
-for img in glob.glob("classes\\background\\*.png"):
+for img in tqdm.tqdm(glob.glob("classes\\background\\*.png")):
     im = cv2.imread(img)
     im = cv2.resize(im, (64, 128))
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     fd = get_HOG_features(im, pixels_per_cell=pixel_window, bin_count=orientation_bins, cells_per_block=2)
-    lbp = local_binary_pattern(im, circle, radius, 'default')
     background_x.append(fd)
     background_y.append(0)
-
-# even out datasets
-#if len(background_y) < len(people_y):
-#    people_y=people_y[0:len(background_y)]
-#    people_x=people_x[0:len(background_y)]
-#else:
-#    background_y=background_y[0:len(people_y)]
-#    background_x=background_x[0:len(people_y)]
 
 x = people_x + background_x
 y = people_y + background_y
 
 # Shuffle using numpy -> think of etter way later on.
 x_train, y_train = shuffle(np.asarray(x), np.asarray(y))
-#y_train = keras.utils.to_categorical(y, num_classes=2)
 
 print("Starting Keras Model...")
 # model
@@ -89,6 +77,7 @@ model = keras.Sequential(
 checkpoint_path = './models'
 SaveBest = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, monitor="val_accuracy", mode="max",
                                            save_weights_only=True, save_best_only=True)
+TensorBoard = keras.callbacks.TensorBoard(log_dir='logs/')
 
 model.summary()
 optimizer = keras.optimizers.SGD(learning_rate=0.1)

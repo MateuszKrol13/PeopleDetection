@@ -12,10 +12,8 @@ def get_HOG_features(image, pixels_per_cell, bin_count, cells_per_block):
     BIN_COUNT = bin_count
     CELLS_PER_BLOCK = cells_per_block
 
-
     ### STEP 1 -> Read image ####
     input_image = image
-
 
     ### STEP 2 -> calculate gradient ###
     _1D_Conv = np.asarray([[-1, 0, 1]])

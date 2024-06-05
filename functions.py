@@ -36,13 +36,3 @@ def get_iou(bb1, bb2):
     area_overlap = w_overlap * h_overlap
 
     return area_overlap / (area_bb2 + area_bb1 - area_overlap)
-
-
-ar = np.asarray([[320., 128.,  64., 128.],
-       [310., 120.,  80., 160.]])
-
-#ar = np.asarray([[310., 120.,  80., 160.],
-#       [1000., 1360.,  64., 128.]])
-
-oio = get_iou(ar[0], ar[1])
-print(oio)
