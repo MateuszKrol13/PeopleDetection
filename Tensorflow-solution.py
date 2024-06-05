@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use('tkAgg')
 import matplotlib.pyplot as plt
 from functions import *
+from HOG import get_HOG_features
 
 # other libs
 import numpy as np
@@ -19,43 +20,50 @@ y = []
 
 #hog params
 orientation_bins = 16
-pixel_window = 32
-input_len = int(128 * 64 * orientation_bins / (pixel_window ** 2))
+pixel_window = 16
+# input_len = int(128 * 64 * orientation_bins / (pixel_window ** 2))
+
 
 # Try LBP
 radius = 2
 circle = radius * 8
 
 # Load data - list of numpy arrays
+print("Getting people dataset features...")
 people_x = []
 people_y = []
 for img in glob.glob("classes\\person\\*.png"):
     im = cv2.imread(img)
-    im = cv2.resize(im, (128, 64))
+    im = cv2.resize(im, (64, 128))
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-    fd = hog(im, orientations=orientation_bins, pixels_per_cell=(pixel_window, pixel_window), cells_per_block=(1, 1))
+    #fd = hog(im, orientations=orientation_bins, pixels_per_cell=(pixel_window, pixel_window), cells_per_block=(2, 2))
+    fd = get_HOG_features(im, pixels_per_cell=pixel_window, bin_count=orientation_bins, cells_per_block=2)
     lbp = local_binary_pattern(im, circle, radius, 'default')
     people_x.append(fd)
     people_y.append(1)
 
+people_x = people_x[:1000]
+people_y = people_y[:1000]
+
+print("Getting background dataset features...")
 background_x = []
 background_y = []
 for img in glob.glob("classes\\background\\*.png"):
     im = cv2.imread(img)
-    im = cv2.resize(im, (128, 64))
+    im = cv2.resize(im, (64, 128))
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-    fd = hog(im, orientations=orientation_bins, pixels_per_cell=(pixel_window, pixel_window), cells_per_block=(1, 1))
+    fd = get_HOG_features(im, pixels_per_cell=pixel_window, bin_count=orientation_bins, cells_per_block=2)
     lbp = local_binary_pattern(im, circle, radius, 'default')
     background_x.append(fd)
     background_y.append(0)
 
 # even out datasets
-if len(background_y) < len(people_y):
-    people_y=people_y[0:len(background_y)]
-    people_x=people_x[0:len(background_y)]
-else:
-    background_y=background_y[0:len(people_y)]
-    background_x=background_x[0:len(people_y)]
+#if len(background_y) < len(people_y):
+#    people_y=people_y[0:len(background_y)]
+#    people_x=people_x[0:len(background_y)]
+#else:
+#    background_y=background_y[0:len(people_y)]
+#    background_x=background_x[0:len(people_y)]
 
 x = people_x + background_x
 y = people_y + background_y
@@ -64,7 +72,9 @@ y = people_y + background_y
 x_train, y_train = shuffle(np.asarray(x), np.asarray(y))
 #y_train = keras.utils.to_categorical(y, num_classes=2)
 
+print("Starting Keras Model...")
 # model
+input_len = len(fd)
 model = keras.Sequential(
     [
         keras.Input(shape=input_len),
@@ -84,13 +94,13 @@ model.summary()
 optimizer = keras.optimizers.SGD(learning_rate=0.1)
 loss = keras.losses.BinaryCrossentropy(from_logits=False)
 model.compile(loss=loss, optimizer=optimizer, metrics=["accuracy"])
-model.fit(x_train, y_train, batch_size=128, epochs=100, validation_split=0.3, callbacks=[SaveBest])
+model.fit(x_train, y_train, batch_size=128, epochs=200, validation_split=0.3, callbacks=[SaveBest])
 model.load_weights(checkpoint_path)
 
 # Moving window part :D
-test_image = cv2.imread("people_2.jpg")
+test_image = cv2.imread("people_1.jpg")
 test_image = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
-test_image_cpy = test_image
+test_image_cpy = np.copy(test_image)
 h_test, v_test = np.shape(test_image)
 sv = 64         # image dims
 sh = 128
@@ -112,18 +122,19 @@ for level in range(1, levels):
     count_h = int((h - sh) / step)
     count_v = int((v - sv) / step)
 
-    out_map = np.zeros((count_h, count_v), dtype=float)
+    ft_container = []
     for i in range(count_h):
         for j in range(count_v):
             horizontal = int(i * step)
             vertical = int(j * step)
 
             sub_img = curr_img[horizontal:horizontal+sh, vertical:vertical+sv]
-            ft = hog(sub_img, orientations=orientation_bins, pixels_per_cell=(pixel_window, pixel_window), cells_per_block=(1, 1))
-            ft = np.reshape(ft, (1, len(ft)))
+            ft = get_HOG_features(sub_img, pixels_per_cell=pixel_window, bin_count=orientation_bins, cells_per_block=2)
+            ft_container.append(ft)
 
-            out_map[i, j] = model.predict(ft, verbose=0)[0]
-
+    features_map = np.asarray(ft_container)
+    out_map = model.predict(features_map).flatten()
+    out_map = out_map.reshape((count_h, count_v))
 
     out_map[out_map < 0.5] = 0
     rs, cs = np.where(out_map > 0)
@@ -147,6 +158,10 @@ plt.figure(figsize=(10, 10))
 plt.imshow(test_image_cpy, cmap='gray')
 plt.title('Detections')
 plt.show(block=True)
+
+
+test_image = cv2.imread("people_1.jpg")
+test_image = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
 
 # reduce boxes
 filtered_dets =[]
@@ -174,7 +189,7 @@ while True:
 
     # remove unwanted rois
     iou_tab = np.asarray(iou_tab)
-    idx_to_delete = np.where(iou_tab > 0.05)
+    idx_to_delete = np.where(iou_tab > 0.01)
     tmp_dets = np.delete(tmp_dets, idx_to_delete, 0)
     tmp_scores = np.delete(tmp_scores, idx_to_delete)
 

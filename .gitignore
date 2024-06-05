@@ -163,3 +163,8 @@ cython_debug/
 classes/background/*
 classes/person/*
 *.keras
+*.npy
+*.index
+MLP-from-scratch.py
+models.data-00000-of-00001
+models.index
