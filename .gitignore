@@ -167,3 +167,6 @@ classes/person/*
 *.index
 models.data-00000-of-00001
 models.index
+/logs/
+/models/
+*.png
